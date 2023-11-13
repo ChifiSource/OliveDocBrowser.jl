@@ -1,0 +1,7 @@
+name = "OliveDocBrowser"
+uuid = "730a473e-e451-46cc-9004-d443de66d173"
+authors = ["emmac <emmacboudreau@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Olive = "724ecaf6-c7a0-4c22-b37e-0bb7b4193da8"
