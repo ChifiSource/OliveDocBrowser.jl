@@ -21,8 +21,7 @@ build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrows
             end
         end for p in c[:OliveCore].open[getname(c)].projects]
         filter!(x::Any -> ~(isnothing(x)), mods)
-        push!(mods, Olive, c[:OliveCore].olmod)
-        cells = Vector{Cell}([Cell("docmodule", "", mod) for mod in mods])
+        cells = Vector{Cell}([Cell{:docmanager}("")])
         for mod in mods
             
         end
@@ -90,7 +89,7 @@ end
 
 function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{<:Any})
     mainbox::Component{:section} = section("cellcontainer$(cell.id)")
-    n::Vector{Symbol} = names(cell.outputs, all = true)
+    n::Vector{Symbol} = names(cell.outputs[2], all = true)
     remove::Vector{Symbol} =  [Symbol("#eval"), Symbol("#include"), :eval, :example, :include, Symbol(string(cell.outputs))]
     filter!(x -> ~(x in remove) && ~(contains(string(x), "#")), n)
     selectorbuttons::Vector{Servable} = [begin
@@ -103,7 +102,59 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, pro
         end
         docdiv
     end for name in n]
-    mainbox[:children] = vcat([h2("$(cell.outputs)", text = string(cell.outputs))], selectorbuttons)
+    mainbox[:children] = vcat([h2("$(cell.outputs[1])", text = string(cell.outputs))], selectorbuttons)
     mainbox
 end
+
+function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, proj::Project{<:Any})
+    container = div("cell$(cell.id)")
+    style!(container, "padding" => 3percent)
+    if cell.outputs != ""
+
+    end
+    mods = filter!(x -> ~(isnothing(x)), [begin 
+            if :mod in keys(p.data)
+                p.name => p.data[:mod]
+            else
+                nothing
+            end
+        end for p in c[:OliveCore].open[getname(c)].projects])
+    for mod in mods[begin:end]
+        current_module = mod[2]
+        for name in names(current_module, all = true)
+            if isdefined(current_module, name) && getfield(current_module, name) isa Module
+                f = getfield(current_module, name)
+                push!(mods, string(f) => f)
+                push!(container, make_module_button(c, cell, proj, string(f)))
+            end
+        end
+        push!(container, make_module_button(c, cell, proj, mod[1]))
+    end
+    cell.outputs = mods
+    container
+end
+
+function build(c::AbstractConnection, cm::ComponentModifier, p::Project{:doc})
+    frstcells::Vector{Cell} = p[:cells]
+    retvs = Vector{Servable}([begin
+       c[:OliveCore].olmod.build(c, cm, cell, p)::Component{<:Any}
+    end for cell in frstcells])
+    main = div(p.id, children = retvs, class = "projectwindow", align = "center")::Component{:div}
+end
+
+function make_module_button(c::AbstractConnection, cell::Cell{:docmanager}, proj::Project{:doc}, name::String)
+    cells = proj[:cells]
+    mod_b = button("make-$name", text = name)
+    style!(mod_b, "padding" => 2percent, "color" => "white", 
+    "font-weight" => "bold", "width" => 60percent)
+    on(c, mod_b, "click") do cm::ComponentModifier
+        found_mod = findfirst(n -> n[1] == name, cell.outputs)
+        found_mod = cell.outputs[found_mod]
+        new_cell = Cell{:docmodule}("", found_mod)
+        push!(cells, new_cell)
+        append!(cm, proj.id, build(c, cm, new_cell, proj))
+    end
+    mod_b::Component{:button}
+end
+
 end # module OliveDocBrowser
