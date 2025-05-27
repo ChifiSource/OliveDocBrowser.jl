@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "8dc8b482790c3f09f234df9d04806ddcb341c45f"
+project_hash = "8ee85ea72b03a775b14dc275ee665157365c181c"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -182,6 +182,12 @@ deps = ["IPyCells", "OliveHighlighters", "Pkg", "Revise", "TOML", "Toolips", "To
 git-tree-sha1 = "84c3c9e9c54a54f75a854000c99891b8640a4c0c"
 uuid = "724ecaf6-c7a0-4c22-b37e-0bb7b4193da8"
 version = "0.1.2"
+
+[[deps.OliveDocBrowser]]
+deps = ["Olive"]
+path = ".."
+uuid = "730a473e-e451-46cc-9004-d443de66d173"
+version = "0.1.0"
 
 [[deps.OliveHighlighters]]
 deps = ["ToolipsServables"]
