@@ -1,3 +1,26 @@
+"""
+#### OliveDocBrowser -- Built-in doc-browser for `Olive`.
+Created in May, 2025 by
+[chifi - an open source software dynasty.](https://github.com/orgs/ChifiSource)
+- This software is MIT-licensed.
+
+This package, when loaded as an extension, provides `Olive` with an automatically-generated documentation project 
+quickly accessible via a new top-bar button. To load this extension, add `using OliveDocBrowser` to your `olive.jl` 
+or call `using OliveDocBrowser` before running `Olive` in `headless` mode.
+---
+###### contents
+```julia
+# Olive method bindings:
+build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrowser})
+build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
+build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{<:Any})
+build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, proj::Project{<:Any})
+build(c::AbstractConnection, cm::ComponentModifier, p::Project{:doc})
+# internal functions:
+julia_interpolator(raw::String, tm::Olive.Highlighter)
+make_module_button(c::AbstractConnection, cell::Cell{:docmanager}, proj::Project{:doc}, name::String)
+```
+"""
 module OliveDocBrowser
 using Olive.Toolips
 using Olive.ToolipsSession
@@ -47,10 +70,6 @@ build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrows
     insert!(om, "rightmenu", 1, explorericon)
 end
 
-function build(c::Connection, cm::ComponentModifier, cell::Cell{:docdirectory}, proj::Project{<:Any})
-
-end
-
 function build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
     fname::String = p.id
     tabbody::Component{:div} = div("tab$(fname)", class = "tabopen", 
@@ -84,21 +103,19 @@ function build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
         decollapse_button::Component{:span} = span("$(fname)dec", text = "arrow_left", class = "tablabel")
         on(c, decollapse_button, "click") do cm2::ComponentModifier
             remove!(cm2, "$(fname)close")
-            remove!(cm2, "$(fname)add")
-            remove!(cm2, "$(fname)restart")
-            remove!(cm2, "$(fname)run")
             remove!(cm2, "$(fname)switch")
             remove!(cm2, "$(fname)dec")
         end
         style!(decollapse_button, "color" => "blue")
         controls::Vector{<:AbstractComponent} = Olive.tab_controls(c, p)
+        controls = [controls[2], controls[5]]
         insert!(controls, 1, decollapse_button)
         [begin append!(cm, tabbody, serv); nothing end for serv in controls]
     end
     tabbody::Component{:div}
 end
 
-function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{<:Any})
+function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{:doc})
     mainbox::Component{:div} = div("cellcontainer$(cell.id)", align = "left")
     style!(mainbox, "border" => "1px solid #1e1e1e", "height" => 10percent, "overflow-y" => "visible")
     current_module = cell.outputs[2]
@@ -167,7 +184,7 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, pro
     mainbox
 end
 
-function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, proj::Project{<:Any})
+function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, proj::Project{:doc})
     refb = span("clsman", text = "update", align = "right", class = "material-icons topbaricons")
     cellbuttons = div("cellbutts")
     container = div("cellcontainer$(cell.id)", children = Vector{Components.AbstractComponent}([Components.element("cell$(cell.id)"), refb, cellbuttons]))
