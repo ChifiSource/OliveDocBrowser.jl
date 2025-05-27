@@ -6,6 +6,17 @@ using Olive.ToolipsServables
 using Olive: getname, Project, build_tab, open_project, Directory, Cell
 import Olive: build, build_tab, style_tab_closed!
 
+function julia_interpolator(raw::String, tm::Olive.Highlighter)
+    set_text!(tm, raw)
+    Olive.OliveHighlighters.mark_julia!(tm)
+    ret::String = string(tm)
+    Olive.OliveHighlighters.clear!(tm)
+    jl_container = div("jlcont", text = ret)
+    style!(jl_container, "background-color" => "#f48fb1", "font-size" => 10pt, "padding" => 25px, 
+    "margin" => 25px, "overflow" => "auto", "max-height" => 25percent, "border-radius" => 3px)
+    string(jl_container)::String
+end
+
 build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrowser}) = begin
     explorericon = Olive.topbar_icon("docico", "newspaper")
     on(c, explorericon, "click") do cm::ComponentModifier
@@ -88,14 +99,16 @@ function build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
 end
 
 function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{<:Any})
-    mainbox::Component{:section} = section("cellcontainer$(cell.id)", align = "left")
+    mainbox::Component{:div} = div("cellcontainer$(cell.id)", align = "left")
+    style!(mainbox, "border" => "1px solid #1e1e1e", "height" => 10percent, "overflow-y" => "visible")
     current_module = cell.outputs[2]
     n::Vector{Symbol} = names(current_module, all = true)
     remove::Vector{Symbol} =  [Symbol("#eval"), Symbol("#include"), :eval, :example, :include, Symbol(string(cell.outputs))]
     filter!(x -> ~(x in remove) && ~(contains(string(x), "#")), n)
     selectorbuttons::Vector{Servable} = [begin
         docdiv = div("doc$name", text = string(name))
-        style!(docdiv, "cursor" => "pointer", "padding" => 1percent, "color" => "white", "font-size" => 16pt)
+        style!(docdiv, "cursor" => "pointer", "padding" => 1percent, "color" => "white", "font-size" => 16pt, 
+        "border-radius" => 1px)
         if isdefined(cell.outputs[2], name)
             f = getfield(current_module, name)
             if f isa Function
@@ -103,33 +116,92 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, pro
             elseif f isa Type
                 style!(docdiv, "background-color" => "#ab812c")
             else
-                style!(docdiv, "background-color" => "#1e1e1e")
+                style!(docdiv, "background-color" => "#b02774")
+            end
+            on(c, docdiv, "click") do cm2::ComponentModifier
+                if "docs$name" in cm2
+                    remove!(cm2, "docs$name")
+                    return
+                end
+                exp = Meta.parse("""t = eval(Meta.parse("$name")); @doc(t)""")
+                docs = current_module.eval(exp)
+                docum = tmd("docs$name", string(docs))
+                style!(docum, "padding" => 1.5percent)
+                docum[:text] = Olive.Components.rep_in(docum[:text])
+                interp(s::String) = julia_interpolator(s, c[:OliveCore].client_data[Olive.getname(c)]["highlighters"]["julia"])
+                interpolate!(docum, "julia" => interp, "example" => interp)
+                append!(cm2, docdiv, docum)
             end
         else
-            style!(docdiv, "background-color" => "#1e1e1e")
-        end
-        on(c, docdiv, "click") do cm2::ComponentModifier
-            if "docs$name" in cm2
-                remove!(cm2, "docs$name")
-                return
-            end
-            exp = Meta.parse("""t = eval(Meta.parse("$name")); @doc(t)""")
-            docs = current_module.eval(exp)
-            docum = tmd("docs$name", string(docs))
-            append!(cm2, docdiv, docum)
+            style!(docdiv, "background-color" => "#474647")
+            docdiv[:text] = "could not find definition ($(docdiv[:text]))"
         end
         docdiv
     end for name in n]
+    deleter = span("$(cell.outputs[1])del", text = "delete", align = "right", class = "material-icons topbaricons")
+    on(c, deleter, "click") do cm2::ComponentModifier
+        Olive.cell_delete!(c, cm2, cell, proj[:cells])
+    end
+    select_container = div("select$(cell.outputs[1])", children = selectorbuttons)
+    style!(select_container, "opacity" => 0percent, "overflow-x" => "hidden", "overflow-y" => "visible", "height" => 0percent, 
+    "transition" => 600ms)
+    container_collapse = span("$(cell.outputs[1])col", text = "arrow_downward", align = "center", class = "material-icons topbaricons")
+    on(c, container_collapse, "click") do cm::ComponentModifier
+        if cm[container_collapse]["text"] == "arrow_downward"
+            style!(cm, select_container, "height" => 80percent, "opacity" => 100percent)
+            style!(cm, mainbox, "height" => "auto")
+            set_text!(cm, container_collapse, "arrow_upward")
+            return
+        end
+        style!(cm, select_container, "height" => 0percent, "opacity" => 0percent)
+        style!(cm, mainbox, "height" => 10percent)
+        set_text!(cm, container_collapse, "arrow_downward")
+    end
+    style!(container_collapse, "background-color" => "#1e1e1e", "color" => "white", "padding" => .5percent, "width" => 98percent, 
+    "font-size" => 17pt)
+    style!(select_container, "border-radius" => 0px, "overflow-x" => "hidden", "overflow-y" => "scroll")
+    style!(deleter, "color" => "red", "width" => 80percent, "font-size" => 14pt, "margin-top" => 1percent)
     style!(mainbox, "display" => "grid", "grid-column" => 4)
-    mainbox[:children] = vcat([h2("$(cell.outputs[1])", text = string(cell.outputs[1]), align = "center")], selectorbuttons)
+    mainbox[:children] = [Components.element("cell$(cell.id)"), deleter,
+        h2("$(cell.outputs[1])", text = string(cell.outputs[1]), align = "center"), container_collapse, select_container]
     mainbox
 end
 
 function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, proj::Project{<:Any})
-    container = div("cell$(cell.id)")
-    style!(container, "padding" => 3percent)
+    refb = span("clsman", text = "update", align = "right", class = "material-icons topbaricons")
+    cellbuttons = div("cellbutts")
+    container = div("cellcontainer$(cell.id)", children = Vector{Components.AbstractComponent}([Components.element("cell$(cell.id)"), refb, cellbuttons]))
+    style!(refb, "color" => "blue", "width" => 80percent, "font-size" => 14pt, "margin-top" => 1percent)
+    on(c, refb, "click") do cm2::ComponentModifier
+        container = Vector{AbstractComponent}()
+        mods = filter!(x -> ~(isnothing(x)), [begin 
+            if :mod in keys(p.data)
+                p.name => p.data[:mod]
+            else
+                nothing
+            end
+        end for p in c[:OliveCore].open[getname(c)].projects])
+        for mod in mods[begin:end]
+            current_module = mod[2]
+            for name in names(current_module)
+                if isdefined(current_module, name) && getfield(current_module, name) isa Module
+                    f = getfield(current_module, name)
+                    push!(mods, string(f) => f)
+                    push!(container, make_module_button(c, cell, proj, string(f)))
+                end
+            end
+            push!(container, make_module_button(c, cell, proj, mod[1]))
+        end
+        if length(cell.outputs) == length(mods)
+            Olive.olive_notify!(cm2, "not seeing your modules? Make sure they are exported in your project.", color = "#1e1e1e")
+        end
+        set_children!(cm2, "cellbutts", container)
+        cell.outputs = mods
+    end
+    style!(container, "padding" => 3percent, "border" => "1px solid #333333")
     if cell.outputs != ""
-
+        push!(cellbuttons, (make_module_button(c, cell, proj, out[1]) for out in cell.outputs) ...)
+        return(container)
     end
     mods = filter!(x -> ~(isnothing(x)), [begin 
             if :mod in keys(p.data)
@@ -138,21 +210,16 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, pr
                 nothing
             end
         end for p in c[:OliveCore].open[getname(c)].projects])
-    @info mods
     for mod in mods[begin:end]
         current_module = mod[2]
         for name in names(current_module)
             if isdefined(current_module, name) && getfield(current_module, name) isa Module
                 f = getfield(current_module, name)
                 push!(mods, string(f) => f)
-                push!(container, make_module_button(c, cell, proj, string(f)))
-            else
-                if ~(name == :Olive || name == :Gattino)
-                    continue
-                end
+                push!(cellbuttons, make_module_button(c, cell, proj, string(f)))
             end
         end
-        push!(container, make_module_button(c, cell, proj, mod[1]))
+        push!(cellbuttons, make_module_button(c, cell, proj, mod[1]))
     end
     cell.outputs = mods
     container
@@ -167,11 +234,15 @@ function build(c::AbstractConnection, cm::ComponentModifier, p::Project{:doc})
 end
 
 function make_module_button(c::AbstractConnection, cell::Cell{:docmanager}, proj::Project{:doc}, name::String)
-    cells = proj[:cells]
     mod_b = button("make-$name", text = name)
     style!(mod_b, "padding" => 2percent, "color" => "white", 
     "font-weight" => "bold", "width" => 60percent)
     on(c, mod_b, "click") do cm::ComponentModifier
+        if "$(name)del" in cm
+            olive_notify!(cm, "documentation for $name is already open.", color = "darkred")
+            return
+        end
+        cells = proj[:cells]
         found_mod = findfirst(n -> n[1] == name, cell.outputs)
         found_mod = cell.outputs[found_mod]
         new_cell = Cell{:docmodule}("", found_mod)
