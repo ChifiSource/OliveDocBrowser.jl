@@ -88,21 +88,40 @@ function build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
 end
 
 function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{<:Any})
-    mainbox::Component{:section} = section("cellcontainer$(cell.id)")
-    n::Vector{Symbol} = names(cell.outputs[2], all = true)
+    mainbox::Component{:section} = section("cellcontainer$(cell.id)", align = "left")
+    current_module = cell.outputs[2]
+    n::Vector{Symbol} = names(current_module, all = true)
     remove::Vector{Symbol} =  [Symbol("#eval"), Symbol("#include"), :eval, :example, :include, Symbol(string(cell.outputs))]
     filter!(x -> ~(x in remove) && ~(contains(string(x), "#")), n)
     selectorbuttons::Vector{Servable} = [begin
         docdiv = div("doc$name", text = string(name))
+        style!(docdiv, "cursor" => "pointer", "padding" => 1percent, "color" => "white", "font-size" => 16pt)
+        if isdefined(cell.outputs[2], name)
+            f = getfield(current_module, name)
+            if f isa Function
+                style!(docdiv, "background-color" => "#2c6eab")
+            elseif f isa Type
+                style!(docdiv, "background-color" => "#ab812c")
+            else
+                style!(docdiv, "background-color" => "#1e1e1e")
+            end
+        else
+            style!(docdiv, "background-color" => "#1e1e1e")
+        end
         on(c, docdiv, "click") do cm2::ComponentModifier
+            if "docs$name" in cm2
+                remove!(cm2, "docs$name")
+                return
+            end
             exp = Meta.parse("""t = eval(Meta.parse("$name")); @doc(t)""")
-            docs = cell.outputs.eval(exp)
+            docs = current_module.eval(exp)
             docum = tmd("docs$name", string(docs))
             append!(cm2, docdiv, docum)
         end
         docdiv
     end for name in n]
-    mainbox[:children] = vcat([h2("$(cell.outputs[1])", text = string(cell.outputs))], selectorbuttons)
+    style!(mainbox, "display" => "grid", "grid-column" => 4)
+    mainbox[:children] = vcat([h2("$(cell.outputs[1])", text = string(cell.outputs[1]), align = "center")], selectorbuttons)
     mainbox
 end
 
@@ -119,13 +138,18 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, pr
                 nothing
             end
         end for p in c[:OliveCore].open[getname(c)].projects])
+    @info mods
     for mod in mods[begin:end]
         current_module = mod[2]
-        for name in names(current_module, all = true)
+        for name in names(current_module)
             if isdefined(current_module, name) && getfield(current_module, name) isa Module
                 f = getfield(current_module, name)
                 push!(mods, string(f) => f)
                 push!(container, make_module_button(c, cell, proj, string(f)))
+            else
+                if ~(name == :Olive || name == :Gattino)
+                    continue
+                end
             end
         end
         push!(container, make_module_button(c, cell, proj, mod[1]))
