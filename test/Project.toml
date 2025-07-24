@@ -1,0 +1,11 @@
+name = "test"
+uuid = "3d5f0ab8-d2cb-4d3e-8200-578faf71b677"
+authors = ["emmac <emmaccode@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+OliveDocBrowser = "730a473e-e451-46cc-9004-d443de66d173"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Test = "1.11.0"
