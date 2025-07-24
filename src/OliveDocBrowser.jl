@@ -11,7 +11,7 @@ or call `using OliveDocBrowser` before running `Olive` in `headless` mode.
 ###### contents
 ```julia
 # Olive method bindings:
-build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrowser})
+build(c::Connection, om::Olive.ComponentModifier, oe::Olive.OliveExtension{:docbrowser})
 build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
 build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, proj::Project{<:Any})
 build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, proj::Project{<:Any})
@@ -40,8 +40,10 @@ function julia_interpolator(raw::String, tm::Olive.Highlighter)
     string(jl_container)::String
 end
 
-build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrowser}) = begin
+
+build(c::Connection, om::Olive.ComponentModifier, oe::Olive.OliveExtension{:docbrowser}) = begin
     explorericon = Olive.topbar_icon("docico", "newspaper")
+    user = c[:OliveCore].users[getname(c)]
     on(c, explorericon, "click") do cm::ComponentModifier
         if "doctab" in cm
             olive_notify!(cm, "you already have documentation open, you cannot open two docbrowsers at once.", color = "red")
@@ -53,7 +55,7 @@ build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrows
             else
                 nothing
             end
-        end for p in c[:OliveCore].open[getname(c)].projects]
+        end for p in user.environment.projects]
         filter!(x::Any -> ~(isnothing(x)), mods)
         cells = Vector{Cell}([Cell{:docmanager}("")])
         for mod in mods
@@ -63,7 +65,7 @@ build(c::Connection, om::Olive.OliveModifier, oe::Olive.OliveExtension{:docbrows
         projdict::Dict{Symbol, Any} = Dict{Symbol, Any}(:cells => cells,
         :path => home_direc.uri, :env => home_direc.uri, :pane => "one")
         myproj::Project{:doc} = Project{:doc}("docs", projdict)
-        push!(c[:OliveCore].open[getname(c)].projects, myproj)
+        push!(user.environment.projects, myproj)
         tab::Component{:div} = build_tab(c, myproj)
         Olive.open_project(c, cm, myproj, tab)
     end
@@ -81,7 +83,7 @@ function build_tab(c::Connection, p::Project{:doc}; hidden::Bool = false)
     style = "color:white;")
     push!(tabbody, tablabel)
     on(c, tabbody, "click") do cm::ComponentModifier
-        projects::Vector{Project{<:Any}} = c[:OliveCore].open[getname(c)].projects
+        projects::Vector{Project{<:Any}} = c[:OliveCore].users[getname(c)].environment.projects
         inpane = findall(proj::Project{<:Any} -> proj[:pane] == p[:pane], projects)
         [begin
             if projects[e].id != p.id 
@@ -145,7 +147,7 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmodule}, pro
                 docum = tmd("docs$name", string(docs))
                 style!(docum, "padding" => 1.5percent)
                 docum[:text] = Olive.Components.rep_in(docum[:text])
-                interp(s::String) = julia_interpolator(s, c[:OliveCore].client_data[Olive.getname(c)]["highlighters"]["julia"])
+                interp(s::String) = julia_interpolator(s, Olive.CORE.users[Olive.getname(c)]["highlighters"]["julia"])
                 interpolate!(docum, "julia" => interp, "example" => interp)
                 append!(cm2, docdiv, docum)
             end
@@ -197,7 +199,7 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, pr
             else
                 nothing
             end
-        end for p in c[:OliveCore].open[getname(c)].projects])
+        end for p in c[:OliveCore].users[getname(c)].environment.projects])
         for mod in mods[begin:end]
             current_module = mod[2]
             for name in names(current_module)
@@ -226,7 +228,7 @@ function build(c::Connection, cm::ComponentModifier, cell::Cell{:docmanager}, pr
             else
                 nothing
             end
-        end for p in c[:OliveCore].open[getname(c)].projects])
+        end for p in c[:OliveCore].users[getname(c)].environment.projects])
     for mod in mods[begin:end]
         current_module = mod[2]
         for name in names(current_module)
